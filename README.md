@@ -71,10 +71,27 @@ Sign in as an admin (an email listed in `ADMIN_EMAILS`) and go to **Admin** (top
 
 The app is a standard Next.js server plus a Postgres database — deploy it however suits your infrastructure:
 
-- **Vercel + a managed Postgres** (Neon, Supabase, Vercel Postgres): push this repo, set the environment variables from `.env.example` in the Vercel project settings, and point `DATABASE_URL` at your managed database. Run `npx prisma migrate deploy` once (e.g. via a one-off `vercel exec` or locally against the production `DATABASE_URL`) before first use.
+- **Vercel + Neon (recommended for this team size)**: import this repo into Vercel, add a Neon Postgres via Vercel's Storage tab (this sets `DATABASE_URL` automatically), then add the rest of the variables from `.env.example` in Project Settings → Environment Variables. The `vercel-build` script in `package.json` (`prisma generate && prisma migrate deploy && next build`) runs the database migration automatically on every deploy — Vercel picks up a `vercel-build` script over `build` automatically, no extra config needed. See the step-by-step walkthrough below.
+- **Vercel + another managed Postgres** (Supabase, Vercel Postgres): same as above, just set `DATABASE_URL` yourself instead of using the Neon integration.
 - **Any container host** (Azure Container Apps/App Service, AWS, Fly.io, Render, a plain VM): `docker build -t hris-metrics-hub .` and run it with the environment variables set. Run `npx prisma migrate deploy` against the production database as a separate step before starting new containers — it's intentionally not baked into the container's start command, so scaling to multiple replicas doesn't race migrations.
 
 Either way, `npm run db:seed` is meant for local dev/demo data only — for a real launch, skip it (or edit `prisma/seed.ts` first) and let the team start entering real numbers from an empty database.
+
+### Vercel + Neon walkthrough
+
+1. **Import the repo**: at [vercel.com/new](https://vercel.com/new), sign in (GitHub login works), and import `JordinaNoe/HRISMetrics`. Leave the framework preset as Next.js. Don't click Deploy yet — add the database and environment variables first (steps below), otherwise the first build will fail with no `DATABASE_URL`.
+2. **Add a database**: in the new project, go to the **Storage** tab → **Create Database** → **Neon** (Postgres) → follow the prompts to create it and connect it to this project. Vercel sets `DATABASE_URL` for you automatically — you never need to see or copy the password.
+3. **Add the rest of the environment variables**: Project Settings → Environment Variables. From `.env.example`, add:
+   - `AUTH_SECRET` — generate one yourself with `openssl rand -base64 32` (or any long random string) and paste it in directly.
+   - `ALLOWED_EMAIL_DOMAIN` — e.g. `rakuten.com`.
+   - `ADMIN_EMAILS` — your email, comma-separated if more than one admin.
+   - `AUTH_MICROSOFT_ENTRA_ID_ID`, `AUTH_MICROSOFT_ENTRA_ID_SECRET`, `AUTH_MICROSOFT_ENTRA_ID_ISSUER` — once you've registered the Azure AD app (see [Setting up Microsoft SSO](#setting-up-microsoft-sso) above). Its redirect URI needs your Vercel URL: `https://<your-project>.vercel.app/api/auth/callback/microsoft-entra-id`.
+   - Until SSO is registered, you can set `ALLOW_DEV_LOGIN=true` instead to get the site live and clickable — see the security note below before sharing the link.
+4. **Deploy**: click Deploy. Vercel runs `prisma migrate deploy` automatically as part of the build (see the `vercel-build` script), so the database schema is created on first deploy — no manual migration step needed.
+5. **(Optional) seed sample data**: only if you want the ~2,300-row sample dataset for demoing before real numbers come in. Run `npm run db:seed` from your own machine with `DATABASE_URL` set to the Neon connection string (copy it from Vercel's Storage tab → your database → `.env.local` tab, or Neon's own dashboard) — don't paste that connection string into a chat with anyone, it's a live database password.
+6. Every future push to `main` auto-deploys.
+
+**Security note on `ALLOW_DEV_LOGIN`**: with it set to `true`, anyone who has the URL can type *any* email at your allowed domain and be let in as that person — there's no password check. It's meant to get something clickable live for a few days while Microsoft SSO is being registered, not for real rollout. Turn it off (delete the env var or set it to `false`) as soon as SSO works, then redeploy.
 
 ## Project structure
 
