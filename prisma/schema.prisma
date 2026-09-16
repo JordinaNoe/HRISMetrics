@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// One row per (category, metric, owner, region, year, month) — mirrors the
+// prototype's flat data model so the existing aggregation logic ports as-is.
+model MetricEntry {
+  id        Int      @id @default(autoincrement())
+  category  String
+  metric    String
+  owner     String
+  unit      String
+  region    String
+  year      Int
+  month     Int
+  value     Float
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([category, metric, owner, region, year, month])
+  @@index([year, month])
+  @@index([category])
+}
+
+// Which company-account emails may submit entries for a given category.
+// Lets an admin reassign ownership without a code change.
+model CategoryAccess {
+  category String   @id
+  emails   String[]
+}
+
+// Small key/value store for app-wide state, e.g. the "data last updated" label.
+model AppMeta {
+  key   String @id
+  value String
+}
